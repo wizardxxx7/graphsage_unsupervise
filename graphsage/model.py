@@ -87,7 +87,7 @@ class UnsupervisedGraphSageCls(nn.Module):
 
     def loss(self, nodes, labels):
         scores = self.forward(nodes)
-        return self.xent(scores, labels.squeeze())
+        return self.xent(scores, labels.squeeze()), scores
 
 
 def load_cora():
@@ -156,10 +156,10 @@ def un_cora(model_d=128, cuda=False):
 
     optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad,
                                        graphsage.parameters()),
-                                lr=0.2)
+                                lr=0.05)
     times = []
 
-    epoch_num = 10
+    epoch_num = 20
     batch_size = 512
     for batch in range(epoch_num * int(train_size / batch_size)):
         # batch_size
@@ -183,41 +183,50 @@ def un_cora(model_d=128, cuda=False):
         times.append(end_time - start_time)
         print('[%f / %d]' % (float(batch / int(train_size / batch_size)), epoch_num), 'batch:', batch, 'loss:', loss.item())
 
-    # print('############ Training Classification ##########')
-    # cls_model = UnsupervisedGraphSageCls(7, enc2)
-    # cls_optimizer = torch.optim.SGD([cls_model.weight], lr=0.1)
-    # for batch in range(epoch_num * batch_size):
-    #     # batch_size
-    #     batch_nodes = train[:batch_size]
-    #     # shuffle：random list on itself return none
-    #     random.shuffle(train)
-    #     start_time = time.time()
-    #     # set all gradient to be 0
-    #     cls_optimizer.zero_grad()
-    #     # loss 包含 forward
-    #     loss = cls_model.loss(
-    #         batch_nodes,
-    #         Variable(torch.LongTensor(labels[np.array(batch_nodes)])))
-    #
-    #     loss.backward()
-    #     # refresh params' gradient
-    #     cls_optimizer.step()
-    #
-    #     end_time = time.time()
-    #     times.append(end_time - start_time)
-    #     # print(batch, loss.item())
-    #
-    # val_output = cls_model.forward(val)
-    # print(
-    #     "Validation F1:",
-    #     f1_score(labels[val],
-    #              val_output.data.numpy().argmax(axis=1),
-    #              average="micro"))
-    # print("Average batch time:", np.mean(times))
-    # 1
-    # return f1_score(labels[val],
-    #              val_output.data.numpy().argmax(axis=1),
-    #              average="micro")
+    print('############ Training Classification ##########')
+    cls_model = UnsupervisedGraphSageCls(7, enc2)
+    cls_optimizer = torch.optim.Adam([cls_model.weight], lr=0.005)
+    cls_epoch_num = 200
+    for batch in range(cls_epoch_num * int(train_size / batch_size)):
+        # batch_size
+        batch_nodes = train[:batch_size]
+        # shuffle：random list on itself return none
+        random.shuffle(train)
+        start_time = time.time()
+        # set all gradient to be 0
+        cls_optimizer.zero_grad()
+        # loss 包含 forward
+        loss, scores = cls_model.loss(
+            batch_nodes,
+            Variable(torch.LongTensor(labels[np.array(batch_nodes)])))
+
+        loss.backward()
+        # refresh params' gradient
+        cls_optimizer.step()
+
+        end_time = time.time()
+        times.append(end_time - start_time)
+        if batch % 10 == 0:
+            print('[%f / %d]' % (float(batch / int(train_size / batch_size)), cls_epoch_num), 'batch:', batch,
+                  'loss:', loss.item())
+            val_output = cls_model.forward(val)
+            print(
+                "Validation F1:",
+                f1_score(labels[val],
+                         val_output.data.numpy().argmax(axis=1),
+                         average="micro"))
+
+    val_output = cls_model.forward(val)
+    print(
+        "Validation F1:",
+        f1_score(labels[val],
+                 val_output.data.numpy().argmax(axis=1),
+                 average="micro"))
+    print("Average batch time:", np.mean(times))
+    1
+    return f1_score(labels[val],
+                 val_output.data.numpy().argmax(axis=1),
+                 average="micro")
 
 
 def run_cora():
